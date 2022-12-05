@@ -5,33 +5,40 @@ import { IAxelarGasService } from '@axelar-network/axelar-gmp-sdk-solidity/contr
 import { IAxelarGateway } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGateway.sol';
 import { IAxelarExecutable } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarExecutable.sol';
 import { StringToAddress, AddressToString } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/StringAddressUtils.sol';
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
-interface ConstAddressDeployer {
-    function deploy(bytes memory bytecode, bytes32 salt) external returns (address deployedAddress_);
-    function deployAndInit(bytes memory bytecode, bytes32 salt, bytes calldata init) external returns (address deployedAddress_);
-    function deployedAddress(bytes calldata bytecode, address sender, bytes32 salt) external view returns (address deployedAddress_);
-}
+//interface ConstAddressDeployer {
+//    function deploy(bytes memory bytecode, bytes32 salt) external returns (address deployedAddress_);
+//    function deployAndInit(bytes memory bytecode, bytes32 salt, bytes calldata init) external returns (address deployedAddress_);
+//    function deployedAddress(bytes calldata bytecode, address sender, bytes32 salt) external view returns (address deployedAddress_);
+//}
 
-contract MultiChainDeployer is IAxelarExecutable  {
+contract MultiChainDeployer is Initializable, IAxelarExecutable  {
     using StringToAddress for string;
     using AddressToString for address;
 
     event DeployStarted(address deployedAddress_, string[] chainNames);
     event DeployEnded(address deployedAddress_);
 
-    ConstAddressDeployer cad = ConstAddressDeployer(0x98B2920D53612483F91F12Ed7754E51b4A77919e);
+    //ConstAddressDeployer cad = ConstAddressDeployer(0x98B2920D53612483F91F12Ed7754E51b4A77919e);
    
     //TODO: move these to initializer?
-    IAxelarGateway public gateway = IAxelarGateway(0xe432150cce91c13a887f7D836923d5597adD8E31);
-    IAxelarGasService public gasReceiver = IAxelarGasService(0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6);
+    IAxelarGateway public gateway; // = IAxelarGateway(0xe432150cce91c13a887f7D836923d5597adD8E31);
+    IAxelarGasService public gasReceiver; // = IAxelarGasService(0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6);
 
     //constructor(address gateway_, address gasReceiver_) AxelarExecutable(gateway_) {
     //    gasReceiver = IAxelarGasService(gasReceiver_);
     //}
 
-    function deploy(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses) external returns (address deployedAddress_) {
-        bytes memory payload = abi.encode(bytecode, salt);
-        deployedAddress_ = cad.deployedAddress(bytecode, destinationAddresses[0], salt);
+    function initialize(address gateway_, address gasReceiver_) public virtual initializer {
+        gateway = IAxelarGateway(gateway_);
+        gasReceiver = IAxelarGasService(gasReceiver_);
+    }
+
+    function multiDeploy(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses) external returns (address deployedAddress_) {
+        bytes memory payload = abi.encode(bytecode, salt, bytes(""), msg.sender);
+        //deployedAddress_ = this.deployedAddress(bytecode, msg.sender, salt);
+        deployedAddress_ = this.deploy(bytecode, salt, msg.sender);
         for(uint i = 0; i < chainNames.length; i++) {
             string memory stringAddress = address(destinationAddresses[i]).toString();
             gasReceiver.payNativeGasForContractCall{ value: 0.01 ether }(
@@ -39,7 +46,24 @@ contract MultiChainDeployer is IAxelarExecutable  {
                 chainNames[i],
                 stringAddress,
                 payload,
-                address(this)
+                msg.sender  // change this to address(this) for production?
+            );
+            gateway.callContract(chainNames[i], stringAddress, payload);
+        }
+        emit DeployStarted(deployedAddress_, chainNames);
+    }
+
+    function multiDeployAndInit(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses, bytes[] memory inits) external returns (address deployedAddress_) {
+        deployedAddress_ = this.deploy(bytecode, salt, msg.sender);
+        for(uint i = 0; i < chainNames.length; i++) {
+            bytes memory payload = abi.encode(bytecode, salt, inits[i], msg.sender);
+            string memory stringAddress = address(destinationAddresses[i]).toString();
+            gasReceiver.payNativeGasForContractCall{ value: 0.01 ether }(
+                address(this),
+                chainNames[i],
+                stringAddress,
+                payload,
+                msg.sender  // change this to address(this) for production?
             );
             gateway.callContract(chainNames[i], stringAddress, payload);
         }
@@ -52,8 +76,13 @@ contract MultiChainDeployer is IAxelarExecutable  {
         string calldata sourceAddress,
         bytes calldata payload
     ) external {
-        (bytes memory bytecode, bytes32 salt) = abi.decode(payload, (bytes,bytes32));
-        address deployedAddress_ = cad.deploy(bytecode, salt);
+        (bytes memory bytecode, bytes32 salt, bytes memory init, address sender) = abi.decode(payload, (bytes,bytes32,bytes,address));
+        address deployedAddress_;
+        if (init.length > 0) {
+            deployedAddress_ = this.deployAndInit(bytecode, salt, init, sender);
+        } else {
+            deployedAddress_ = this.deploy(bytecode, salt, sender);
+        }
         emit DeployEnded(deployedAddress_);
     }
 
@@ -67,4 +96,95 @@ contract MultiChainDeployer is IAxelarExecutable  {
     ) external {}
 
     receive() external payable {}
+
+    // @dev From '@axelar-network/axelar-gmp-sdk-solidity/contracts/ConstantAddressDeployer.sol':
+
+    error EmptyBytecode();
+    error FailedDeploy();
+    error FailedInit();
+
+    event Deployed(bytes32 indexed bytecodeHash, bytes32 indexed salt, address indexed deployedAddress);
+
+    /**
+     * @dev Deploys a contract using `CREATE2`. The address where the contract
+     * will be deployed can be known in advance via {deployedAddress}.
+     *
+     * The bytecode for a contract can be obtained from Solidity with
+     * `type(contractName).creationCode`.
+     *
+     * Requirements:
+     *
+     * - `bytecode` must not be empty.
+     * - `salt` must have not been used for `bytecode` already by the same `msg.sender`.
+     */
+    function deploy(bytes memory bytecode, bytes32 salt, address sender) external returns (address deployedAddress_) {
+        deployedAddress_ = _deploy(bytecode, keccak256(abi.encode(sender, salt)));
+    }
+
+    /**
+     * @dev Deploys a contract using `CREATE2` and initialize it. The address where the contract
+     * will be deployed can be known in advance via {deployedAddress}.
+     *
+     * The bytecode for a contract can be obtained from Solidity with
+     * `type(contractName).creationCode`.
+     *
+     * Requirements:
+     *
+     * - `bytecode` must not be empty.
+     * - `salt` must have not been used for `bytecode` already by the same `msg.sender`.
+     * - `init` is used to initialize the deployed contract
+     *    as an option to not have the constructor args affect the address derived by `CREATE2`.
+     */
+    function deployAndInit(
+        bytes memory bytecode,
+        bytes32 salt,
+        bytes calldata init,
+        address sender
+    ) external returns (address deployedAddress_) {
+        deployedAddress_ = _deploy(bytecode, keccak256(abi.encode(sender, salt)));
+
+        // solhint-disable-next-line avoid-low-level-calls
+        (bool success, ) = deployedAddress_.call(init);
+        if (!success) revert FailedInit();
+    }
+
+    /**
+     * @dev Returns the address where a contract will be stored if deployed via {deploy} or {deployAndInit} by `sender`.
+     * Any change in the `bytecode`, `sender`, or `salt` will result in a new destination address.
+     */
+    function deployedAddress(
+        bytes calldata bytecode,
+        address sender,
+        bytes32 salt
+    ) external view returns (address deployedAddress_) {
+        bytes32 newSalt = keccak256(abi.encode(sender, salt));
+        deployedAddress_ = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            hex'ff',
+                            address(this),
+                            newSalt,
+                            keccak256(bytecode) // init code hash
+                        )
+                    )
+                )
+            )
+        );
+    }
+
+    function _deploy(bytes memory bytecode, bytes32 salt) internal returns (address deployedAddress_) {
+        if (bytecode.length == 0) revert EmptyBytecode();
+
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            deployedAddress_ := create2(0, add(bytecode, 32), mload(bytecode), salt)
+        }
+
+        if (deployedAddress_ == address(0)) revert FailedDeploy();
+
+        emit Deployed(keccak256(bytecode), salt, deployedAddress_);
+    }
+
 }

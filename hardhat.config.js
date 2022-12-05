@@ -6,7 +6,7 @@ require("@nomiclabs/hardhat-ethers");
 require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-web3");
 require("@nomiclabs/hardhat-waffle");
-const { API_URL_MUMBAI, API_URL_POLYGON, API_URL_GOERLI, API_URL_OPTIGOERLI, PRIVATE_KEY, ETHERSCAN_API_KEY, POLYSCAN_API_KEY, OPTISCAN_API_KEY } = process.env;
+const { API_URL_MUMBAI, API_URL_POLYGON, API_URL_GOERLI, API_URL_OPTIGOERLI, API_URL_ARBIGOERLI, PRIVATE_KEY, ETHERSCAN_API_KEY, POLYSCAN_API_KEY, OPTISCAN_API_KEY, ARBISCAN_API_KEY } = process.env;
 module.exports = {
   solidity: {
     compilers: [
@@ -66,6 +66,13 @@ module.exports = {
       gasPrice: 1000000000 * 10,
       blockGasLimit: 0x1fffffffffffff
     },
+    "arbitrum-goerli": {
+      url: API_URL_ARBIGOERLI,
+      accounts: [`0x${PRIVATE_KEY}`],
+      gasMultiplier: 10,
+      gasPrice: 1000000000 * 10,
+      blockGasLimit: 0x1fffffffffffff
+    },
     mumbai: {
       url: API_URL_MUMBAI,
       accounts: [`0x${PRIVATE_KEY}`],
@@ -81,7 +88,8 @@ module.exports = {
     apiKey: {
       goerli: ETHERSCAN_API_KEY,
       polygonMumbai: POLYSCAN_API_KEY,
-      "optimism-goperli": OPTISCAN_API_KEY
+      "optimism-goperli": OPTISCAN_API_KEY,
+      "arbitrum-goerli": ARBISCAN_API_KEY
     },
     customChains: [
       {
@@ -90,6 +98,14 @@ module.exports = {
         urls: {
           apiURL: "https://api-goerli-optimism.etherscan.io/api",
           browserURL: "https://goerli-optimism.etherscan.io/"
+        }
+      },
+      {
+        network: "arbitrum-goperli",
+        chainId: 421613,
+        urls: {
+          apiURL: "https://api-goerli.arbiscan.io/",
+          browserURL: "https://goerli.arbiscan.io/"
         }
       }
     ]
