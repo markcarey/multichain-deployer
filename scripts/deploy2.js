@@ -34,6 +34,12 @@ addr["arbitrum-goerli"] = {
     "gas": "0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6",
     "multi": ""
 };
+addr["moonbeam-alpha"] = {
+  "name": "Moonbeam",
+  "gateway": "0x5769D84DD62a6fD969856c75c7D321b84d455929",
+  "gas": "0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6",
+  "multi": ""
+};
 const init = iface.encodeFunctionData("initialize", [ addr[chain].gateway, addr[chain].gas ]);
 
 async function main() {

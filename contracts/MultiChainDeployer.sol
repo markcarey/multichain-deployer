@@ -7,28 +7,16 @@ import { IAxelarExecutable } from '@axelar-network/axelar-gmp-sdk-solidity/contr
 import { StringToAddress, AddressToString } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/StringAddressUtils.sol';
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
-//interface ConstAddressDeployer {
-//    function deploy(bytes memory bytecode, bytes32 salt) external returns (address deployedAddress_);
-//    function deployAndInit(bytes memory bytecode, bytes32 salt, bytes calldata init) external returns (address deployedAddress_);
-//    function deployedAddress(bytes calldata bytecode, address sender, bytes32 salt) external view returns (address deployedAddress_);
-//}
-
 contract MultiChainDeployer is Initializable, IAxelarExecutable  {
     using StringToAddress for string;
     using AddressToString for address;
 
     event DeployStarted(address deployedAddress_, string[] chainNames);
-    event DeployEnded(address deployedAddress_);
-
-    //ConstAddressDeployer cad = ConstAddressDeployer(0x98B2920D53612483F91F12Ed7754E51b4A77919e);
+    //event PayloadFrom(bytes bytecode, bytes32 salt, bytes init, address sender);
+    //event DeployEnded(address deployedAddress_);
    
-    //TODO: move these to initializer?
-    IAxelarGateway public gateway; // = IAxelarGateway(0xe432150cce91c13a887f7D836923d5597adD8E31);
-    IAxelarGasService public gasReceiver; // = IAxelarGasService(0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6);
-
-    //constructor(address gateway_, address gasReceiver_) AxelarExecutable(gateway_) {
-    //    gasReceiver = IAxelarGasService(gasReceiver_);
-    //}
+    IAxelarGateway public gateway;
+    IAxelarGasService public gasReceiver;
 
     function initialize(address gateway_, address gasReceiver_) public virtual initializer {
         gateway = IAxelarGateway(gateway_);
@@ -53,27 +41,31 @@ contract MultiChainDeployer is Initializable, IAxelarExecutable  {
         emit DeployStarted(deployedAddress_, chainNames);
     }
 
-    function multiDeployAndInit(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses, bytes[] memory inits) external returns (address deployedAddress_) {
-        deployedAddress_ = this.deploy(bytecode, salt, msg.sender);
+    function multiDeployAndInit(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses, bytes[] calldata inits) external returns (address deployedAddress_) {
         for(uint i = 0; i < chainNames.length; i++) {
-            bytes memory payload = abi.encode(bytecode, salt, inits[i], msg.sender);
-            string memory stringAddress = address(destinationAddresses[i]).toString();
-            gasReceiver.payNativeGasForContractCall{ value: 0.01 ether }(
-                address(this),
-                chainNames[i],
-                stringAddress,
-                payload,
-                msg.sender  // change this to address(this) for production?
-            );
-            gateway.callContract(chainNames[i], stringAddress, payload);
+            if (keccak256(bytes(chainNames[i])) == keccak256(bytes("this"))) {
+                deployedAddress_ = this.deployAndInit(bytecode, salt, inits[i], msg.sender);
+            } else {
+                bytes memory payload = abi.encode(bytecode, salt, inits[i], msg.sender);
+                //emit PayloadFrom(bytecode, salt, inits[i], msg.sender);
+                string memory stringAddress = address(destinationAddresses[i]).toString();
+                gasReceiver.payNativeGasForContractCall{ value: 0.01 ether }(
+                    address(this),
+                    chainNames[i],
+                    stringAddress,
+                    payload,
+                    msg.sender  // change this to address(this) for production?
+                );
+                gateway.callContract(chainNames[i], stringAddress, payload);
+            }
         }
         emit DeployStarted(deployedAddress_, chainNames);
     }
 
     function execute(
-        bytes32 commandId,
-        string calldata sourceChain,
-        string calldata sourceAddress,
+        bytes32,
+        string calldata,
+        string calldata,
         bytes calldata payload
     ) external {
         (bytes memory bytecode, bytes32 salt, bytes memory init, address sender) = abi.decode(payload, (bytes,bytes32,bytes,address));
@@ -83,7 +75,7 @@ contract MultiChainDeployer is Initializable, IAxelarExecutable  {
         } else {
             deployedAddress_ = this.deploy(bytecode, salt, sender);
         }
-        emit DeployEnded(deployedAddress_);
+        //emit DeployEnded(deployedAddress_);
     }
 
     function executeWithToken(
@@ -97,7 +89,7 @@ contract MultiChainDeployer is Initializable, IAxelarExecutable  {
 
     receive() external payable {}
 
-    // @dev From '@axelar-network/axelar-gmp-sdk-solidity/contracts/ConstantAddressDeployer.sol':
+    // @dev modified from '@axelar-network/axelar-gmp-sdk-solidity/contracts/ConstantAddressDeployer.sol':
 
     error EmptyBytecode();
     error FailedDeploy();
