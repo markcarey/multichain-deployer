@@ -13,7 +13,6 @@ contract MultiChainDeployer is Initializable, IAxelarExecutable  {
 
     event DeployStarted(address deployedAddress_, string[] chainNames);
     //event PayloadFrom(bytes bytecode, bytes32 salt, bytes init, address sender);
-    //event DeployEnded(address deployedAddress_);
    
     IAxelarGateway public gateway;
     IAxelarGasService public gasReceiver;
@@ -23,43 +22,47 @@ contract MultiChainDeployer is Initializable, IAxelarExecutable  {
         gasReceiver = IAxelarGasService(gasReceiver_);
     }
 
-    function multiDeploy(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses) external returns (address deployedAddress_) {
-        bytes memory payload = abi.encode(bytecode, salt, bytes(""), msg.sender);
-        //deployedAddress_ = this.deployedAddress(bytecode, msg.sender, salt);
-        deployedAddress_ = this.deploy(bytecode, salt, msg.sender);
+    function multiDeploy(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses, uint256[] memory fees) external payable returns (address deployedAddress_) {
         for(uint i = 0; i < chainNames.length; i++) {
-            string memory stringAddress = address(destinationAddresses[i]).toString();
-            gasReceiver.payNativeGasForContractCall{ value: 0.01 ether }(
-                address(this),
-                chainNames[i],
-                stringAddress,
-                payload,
-                msg.sender  // change this to address(this) for production?
-            );
-            gateway.callContract(chainNames[i], stringAddress, payload);
+            if (keccak256(bytes(chainNames[i])) == keccak256(bytes("this"))) {
+                deployedAddress_ = this.deploy(bytecode, salt, msg.sender);
+            } else {
+                bytes memory payload = abi.encode(bytecode, salt, bytes(""), msg.sender);
+                //emit PayloadFrom(bytecode, salt, bytes(""), msg.sender);
+                _remoteDeploy(fees[i], chainNames[i], address(destinationAddresses[i]).toString(), payload);
+            }
+        }
+        if (deployedAddress_ == address(0)) {
+            deployedAddress_ = this.deployedAddress(bytecode, msg.sender, salt);
         }
         emit DeployStarted(deployedAddress_, chainNames);
     }
 
-    function multiDeployAndInit(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses, bytes[] calldata inits) external returns (address deployedAddress_) {
+    function multiDeployAndInit(bytes memory bytecode, bytes32 salt, string[] memory chainNames, address[] memory destinationAddresses, uint256[] memory fees, bytes[] calldata inits) external payable returns (address deployedAddress_) {
         for(uint i = 0; i < chainNames.length; i++) {
             if (keccak256(bytes(chainNames[i])) == keccak256(bytes("this"))) {
                 deployedAddress_ = this.deployAndInit(bytecode, salt, inits[i], msg.sender);
             } else {
                 bytes memory payload = abi.encode(bytecode, salt, inits[i], msg.sender);
                 //emit PayloadFrom(bytecode, salt, inits[i], msg.sender);
-                string memory stringAddress = address(destinationAddresses[i]).toString();
-                gasReceiver.payNativeGasForContractCall{ value: 0.01 ether }(
-                    address(this),
-                    chainNames[i],
-                    stringAddress,
-                    payload,
-                    msg.sender  // change this to address(this) for production?
-                );
-                gateway.callContract(chainNames[i], stringAddress, payload);
+                _remoteDeploy(fees[i], chainNames[i], address(destinationAddresses[i]).toString(), payload);
             }
         }
+        if (deployedAddress_ == address(0)) {
+            deployedAddress_ = this.deployedAddress(bytecode, msg.sender, salt);
+        }
         emit DeployStarted(deployedAddress_, chainNames);
+    }
+
+    function _remoteDeploy(uint256 fee, string memory chainName, string memory stringAddress, bytes memory payload) internal {
+        gasReceiver.payNativeGasForContractCall{ value: fee }(
+            address(this),
+            chainName,
+            stringAddress,
+            payload,
+            msg.sender
+        );
+        gateway.callContract(chainName, stringAddress, payload);
     }
 
     function execute(
@@ -75,7 +78,6 @@ contract MultiChainDeployer is Initializable, IAxelarExecutable  {
         } else {
             deployedAddress_ = this.deploy(bytecode, salt, sender);
         }
-        //emit DeployEnded(deployedAddress_);
     }
 
     function executeWithToken(

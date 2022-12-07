@@ -5,7 +5,7 @@ const multiDeployerJSON = require("../artifacts/contracts/MultiChainDeployer.sol
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const signer = new ethers.Wallet(PRIVATE_KEY, ethers.provider);
 
-const v = "eight";
+const v = "one";
 const salt = ethers.utils.formatBytes32String(v);
 
 const ABI = ["function initialize(address gateway_, address gasReceiver_)"];
