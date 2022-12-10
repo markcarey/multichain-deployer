@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/markcarey/multichain-deployer#readme",
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.5",
     "hardhat": "^2.11.1"
   },
   "dependencies": {

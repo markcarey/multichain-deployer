@@ -4,18 +4,12 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const signer = new ethers.Wallet(PRIVATE_KEY, ethers.provider);
 
 const axelarSDK = require("@axelar-network/axelarjs-sdk");
-console.log(axelarSDK);
 const sdk = new axelarSDK.AxelarQueryAPI({
     environment: "testnet",
 });
 const axelar = new axelarSDK.AxelarGMPRecoveryAPI({
     environment: "testnet",
 });
-console.log(sdk);
-const EvmChain = axelarSDK.EvmChain;
-const GasToken = axelarSDK.GasToken;
-console.log(EvmChain);
-console.log(GasToken);
 
 const chain = hre.network.name;
 console.log(chain);
@@ -40,7 +34,7 @@ addr["arbitrum-goerli"] = {
     "gasToken": "ETH",
     "gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31",
     "gas": "0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6",
-    "multi": "0x22a96ef89590dbb8705AC66734137D7BE55991c7"
+    "multi": "0x6736C14F38909e9E17E0312EC9DBdD0d75F0D757"
 };
 addr["moonbeam-alpha"] = {
     "name": "Moonbeam",
@@ -50,7 +44,7 @@ addr["moonbeam-alpha"] = {
     "multi": "0x6736C14F38909e9E17E0312EC9DBdD0d75F0D757"
 };
 
-const v = "twentyfour";
+const v = "twentyfive";
 const salt = ethers.utils.formatBytes32String(v);
 
 //const pHash = ethers.utils.solidityKeccak256(["bytes"],[p]);
@@ -74,8 +68,8 @@ async function main() {
 
     //const targetChains = [ "goerli", "mumbai", "moonbeam-alpha" ];
     //const targetChains = [ "goerli", "moonbeam-alpha" ];
-    //const targetChains = [ "arbitrum-goerli" ];
-    const targetChains = [ "moonbeam-alpha", "mumbai" ];
+    const targetChains = [ "arbitrum-goerli" ];
+    //const targetChains = [ "moonbeam-alpha", "mumbai" ];
     var chainNames = [];
     var destinations = [];
     var inits = [];
