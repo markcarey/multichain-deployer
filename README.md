@@ -1,7 +1,7 @@
 # Multichain Deployer
-_Powered by Alexar_
+_Powered by Axelar_
 
-Multichain Deployer provides a set of contracts that enables developers to deploy and intialize their contracts to multiple chains using a _single transaction_, which each contract being _deployed to the same address_.
+Multichain Deployer provides a set of contracts that enables developers to deploy and initialize their contracts to multiple chains using a _single transaction_, which each contract being _deployed to the same address_.
 
 # Features include:
 - deploy contracts to multiple chains by sending a transaction to _only one chain_ (developer doesn't need native gas for every target chain)
@@ -9,7 +9,7 @@ Multichain Deployer provides a set of contracts that enables developers to deplo
 - (optionally) initialize each contract as part of the same transaction (saving time and reducing the chance of error for large multi-chain deployments)
 
 # How it works
-Starting from the [Constant Address Deployer](https://docs.axelar.dev/dev/build/solidity-utilities#constant-address-deployer) (CAD) contract by Alexar, I expanded it to also provide remote deployment functions. The CAD contracts are deployed to the same address on each chain and provide `deploy()` and `deployAndInt()` functions that developers can call to _deploy their own contracts *from* the CAD contract_. The main reason to do this -- rather than deploy directly -- is to ensure that each deployment on each chain is _deployed to the same address_. But you still need to deploy to each chain separately, calling the CAD functions on each target chain.
+Starting from the [Constant Address Deployer](https://docs.axelar.dev/dev/build/solidity-utilities#constant-address-deployer) (CAD) contract by Axelar, I expanded it to also provide remote deployment functions. The CAD contracts are deployed to the same address on each chain and provide `deploy()` and `deployAndInt()` functions that developers can call to _deploy their own contracts *from* the CAD contract_. The main reason to do this -- rather than deploy directly -- is to ensure that each deployment on each chain is _deployed to the same address_. But you still need to deploy to each chain separately, calling the CAD functions on each target chain.
 
 Multichain Deployer adds `multiDeploy()` and `multiDeployAndInit()` functions. These functions accept not only the bytecode needed to deploy, but also the target chains and addresses. These functions will deploy on the local chain if specified, and also send `callContract()` GMP (General Message Passing) to the Alexar network, to be relayed to the target chains. Once the `execute()` function has been called on the target domains, the same bytecode and other payload data is used to deploy (and optionally initialize) the contract on each target chain.
 
