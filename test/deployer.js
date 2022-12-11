@@ -85,7 +85,7 @@ var salt = ethers.utils.formatBytes32String(textSalt);
 const ABI = ["function initialize(address gateway_, address gasReceiver_)"];
 const iface = new ethers.utils.Interface(ABI);
 
-const allChains = [ "goerli", "mumbai", "arbitrum-goerli", "moonbeam-alpha" ];
+const allChains = [ "mumbai", "arbitrum-goerli", "moonbeam-alpha", "goerli" ];
 for (let i = 0; i < allChains.length; i++) {
     var thisChain = allChains[i];
     const chainProvider = new ethers.providers.JsonRpcProvider({"url": addr[thisChain].rpc});
@@ -98,20 +98,27 @@ var targetChains = [];
 var deployer;
 
 before('Buncha stuff that happens first', async function () {
-    log('###Getting Ready...');
+    log('### Setting up...');
     //targetChains = [ "goerli", "mumbai", "arbitrum-goerli", "moonbeam-alpha" ];
     //targetChains = [ "goerli", "moonbeam-alpha" ];
     //targetChains = [ "mumbai", "arbitrum-goerli" ];
-    targetChains = [ "moonbeam-alpha", "mumbai" ];
+    targetChains = [ "moonbeam-alpha", "mumbai", "goerli" ];
     deployer = new ethers.Contract(addr[chain].multi, multiDeployerJSON.abi, signer);
 });
 
 describe("Multi Deploy via Individual Txns", async function(){
 
     it("should send callContract GMPs from separate txns", async function () {
-
+        this.timeout(100000000);
+        var skipNext = false;
         for (let j = 0; j < targetChains.length; j++) {
+            if (skipNext) { continue; }
             var deployChains = [ targetChains[j] ];
+            skipNext = false;
+            if (targetChains[j+1] == chain) {
+                deployChains.push(targetChains[j+1]);
+                skipNext = true;
+            }
             var chainNames = [];
             var destinations = [];
             var inits = [];
@@ -152,7 +159,7 @@ describe("Multi Deploy via Individual Txns", async function(){
 
     }); // it    
 
-    it("should deploy contracts on the destination chain(s)", async function () {
+    it.skip("should check logs for deployments on the destination chain(s)", async function () {
         this.timeout(100000000);
         var checking = true;
         while (checking) {
@@ -192,72 +199,74 @@ describe("Multi Deploy via Individual Txns", async function(){
 
 describe("Multi Deploy via a Single Txn", async function(){
 
-
     it("should send muliple callContract GMPs from same txn", async function () {
-
         salt = ethers.utils.formatBytes32String("salty" + Date.now());
-
-        //for (let j = 0; j < targetChains.length; j++) {
-            var deployChains = targetChains;
-            var chainNames = [];
-            var destinations = [];
-            var inits = [];
-            var fees = [];
-            var totalFee = 0;
-            const expectedAddress = await deployer.deployedAddress(multiDeployerJSON.bytecode, process.env.PUBLIC_KEY, salt);
-            var externalChainCount = 0;
-            for (let i = 0; i < deployChains.length; i++) {
-                var thisChain = deployChains[i];
-                log('starting with chain ' + thisChain);
-                if ( thisChain == chain ) {
-                    chainNames.push("this");
-                    fees.push("0");
-                } else {
-                    externalChainCount++;
-                    chainNames.push(addr[thisChain].name);
-                    const gasFee = await sdk.estimateGasFee(addr[chain].name, addr[thisChain].name, addr[chain].gasToken, 2000000);
-                    fees.push("" + gasFee);
-                    totalFee += parseInt(gasFee);
-                }
-                destinations.push(addr[thisChain].multi);
-                inits.push(iface.encodeFunctionData("initialize", [ addr[thisChain].gateway, addr[thisChain].gas ]));
-                const payload = abiCoder.encode(["bytes","bytes32","bytes","address"], [multiDeployerJSON.bytecode, salt, inits[i], process.env.PUBLIC_KEY]);
-                //log("payload", payload);
-                const payloadHash = ethers.utils.solidityKeccak256(["bytes"],[payload]);
-                addr[targetChains[i]].payload = payload;
-                addr[targetChains[i]].payloadHash = payloadHash;
-                addr[targetChains[i]].deployedAddress = expectedAddress;
-                log("payloadHash", payloadHash);
-    
-            } //for i
-            log("fee", totalFee);
-
-            //const result = await factory.multiDeploy(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees);
-            //log(multiDeployerJSON.bytecode, salt, chainNames, destinations, inits);
-
-            if (externalChainCount == 1) {
-                await expect(deployer.multiDeployAndInit(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees, inits, {value: "" + totalFee}))
-                    .to.emit(addr[chain].gatewayContract, 'ContractCall')
-                    .withArgs(addr[targetChains[0]].multi, chainNames[0], addr[targetChains[0]].multi.toLowerCase(), addr[targetChains[0]].payloadHash, addr[targetChains[0]].payload);
+        var deployChains = targetChains;
+        var chainNames = [];
+        var destinations = [];
+        var inits = [];
+        var fees = [];
+        var totalFee = 0;
+        const expectedAddress = await deployer.deployedAddress(multiDeployerJSON.bytecode, process.env.PUBLIC_KEY, salt);
+        var externalChainCount = 0;
+        for (let i = 0; i < deployChains.length; i++) {
+            var thisChain = deployChains[i];
+            log('starting with chain ' + thisChain);
+            if ( thisChain == chain ) {
+                chainNames.push("this");
+                fees.push("0");
+            } else {
+                externalChainCount++;
+                chainNames.push(addr[thisChain].name);
+                const gasFee = await sdk.estimateGasFee(addr[chain].name, addr[thisChain].name, addr[chain].gasToken, 2000000);
+                fees.push("" + gasFee);
+                totalFee += parseInt(gasFee);
             }
-            if (externalChainCount == 2) {
-                await expect(deployer.multiDeployAndInit(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees, inits, {value: "" + totalFee}))
-                    .to.emit(addr[chain].gatewayContract, 'ContractCall')
-                    .withArgs(addr[targetChains[0]].multi, chainNames[0], addr[targetChains[0]].multi.toLowerCase(), addr[targetChains[0]].payloadHash, addr[targetChains[0]].payload)
-                    .to.emit(addr[chain].gatewayContract, 'ContractCall')
-                    .withArgs(addr[targetChains[1]].multi, chainNames[1], addr[targetChains[1]].multi.toLowerCase(), addr[targetChains[1]].payloadHash, addr[targetChains[1]].payload);
-            }
-            if (externalChainCount == 3) {
-                await expect(deployer.multiDeployAndInit(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees, inits, {value: "" + totalFee}))
-                    .to.emit(addr[chain].gatewayContract, 'ContractCall')
-                    .withArgs(addr[targetChains[0]].multi, chainNames[0], addr[targetChains[0]].multi.toLowerCase(), addr[targetChains[0]].payloadHash, addr[targetChains[0]].payload)
-                    .to.emit(addr[chain].gatewayContract, 'ContractCall')
-                    .withArgs(addr[targetChains[1]].multi, chainNames[1], addr[targetChains[1]].multi.toLowerCase(), addr[targetChains[1]].payloadHash, addr[targetChains[1]].payload)
-                    .to.emit(addr[chain].gatewayContract, 'ContractCall')
-                    .withArgs(addr[targetChains[2]].multi, chainNames[2], addr[targetChains[2]].multi.toLowerCase(), addr[targetChains[2]].payloadHash, addr[targetChains[2]].payload);
-            }
+            destinations.push(addr[thisChain].multi);
+            inits.push(iface.encodeFunctionData("initialize", [ addr[thisChain].gateway, addr[thisChain].gas ]));
+            const payload = abiCoder.encode(["bytes","bytes32","bytes","address"], [multiDeployerJSON.bytecode, salt, inits[i], process.env.PUBLIC_KEY]);
+            //log("payload", payload);
+            const payloadHash = ethers.utils.solidityKeccak256(["bytes"],[payload]);
+            addr[targetChains[i]].payload = payload;
+            addr[targetChains[i]].payloadHash = payloadHash;
+            addr[targetChains[i]].deployedAddress = expectedAddress;
+            log("payloadHash for " + targetChains[i], payloadHash);
+        } //for i
+        log("fee", totalFee);
 
-        // } // for j
+        //const result = await factory.multiDeploy(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees);
+        //log(multiDeployerJSON.bytecode, salt, chainNames, destinations, inits);
+
+        if (externalChainCount == 1) {
+            await expect(deployer.multiDeployAndInit(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees, inits, {value: "" + totalFee}))
+                .to.emit(addr[chain].gatewayContract, 'ContractCall')
+                .withArgs(addr[targetChains[0]].multi, chainNames[0], addr[targetChains[0]].multi.toLowerCase(), addr[targetChains[0]].payloadHash, addr[targetChains[0]].payload);
+            log("GMP sent to " + targetChains[0] + " to be deployed at " + expectedAddress);
+        }
+        if (externalChainCount == 2) {
+            await expect(deployer.multiDeployAndInit(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees, inits, {value: "" + totalFee}))
+                .to.emit(addr[chain].gatewayContract, 'ContractCall')
+                .withArgs(addr[targetChains[0]].multi, chainNames[0], addr[targetChains[0]].multi.toLowerCase(), addr[targetChains[0]].payloadHash, addr[targetChains[0]].payload)
+                .to.emit(addr[chain].gatewayContract, 'ContractCall')
+                .withArgs(addr[targetChains[1]].multi, chainNames[1], addr[targetChains[1]].multi.toLowerCase(), addr[targetChains[1]].payloadHash, addr[targetChains[1]].payload);
+            log("GMP sent to " + targetChains[0] + " to be deployed at " + expectedAddress);
+            log("GMP sent to " + targetChains[1] + " to be deployed at " + expectedAddress);
+        }
+        if (externalChainCount == 3) {
+            await expect(deployer.multiDeployAndInit(multiDeployerJSON.bytecode, salt, chainNames, destinations, fees, inits, {value: "" + totalFee}))
+                .to.emit(addr[chain].gatewayContract, 'ContractCall')
+                .withArgs(addr[targetChains[0]].multi, chainNames[0], addr[targetChains[0]].multi.toLowerCase(), addr[targetChains[0]].payloadHash, addr[targetChains[0]].payload)
+                .to.emit(addr[chain].gatewayContract, 'ContractCall')
+                .withArgs(addr[targetChains[1]].multi, chainNames[1], addr[targetChains[1]].multi.toLowerCase(), addr[targetChains[1]].payloadHash, addr[targetChains[1]].payload)
+                .to.emit(addr[chain].gatewayContract, 'ContractCall')
+                .withArgs(addr[targetChains[2]].multi, chainNames[2], addr[targetChains[2]].multi.toLowerCase(), addr[targetChains[2]].payloadHash, addr[targetChains[2]].payload);
+            log("GMP sent to " + targetChains[0] + " to be deployed at " + expectedAddress);
+            log("GMP sent to " + targetChains[1] + " to be deployed at " + expectedAddress);
+            log("GMP sent to " + targetChains[2] + " to be deployed at " + expectedAddress);
+        }
+        if (targetChains.length > externalChainCount) {
+            log("deployed to " + chain + " at " + expectedAddress);
+        }
 
     }); // it    
 
@@ -277,6 +286,7 @@ describe("Multi Deploy via a Single Txn", async function(){
                 await expect(addr[thisChain].multiContract.connect(addr[thisChain].signer).execute(payloadHash, sourceChain, sourceAdress, payload))
                     .to.emit(addr[thisChain].multiContract, "Deployed")
                     .withArgs(ethers.utils.solidityKeccak256(["bytes"],[multiDeployerJSON.bytecode]), newSalt, addr[thisChain].deployedAddress);
+                log("deployed to " + thisChain + " at " + addr[thisChain].deployedAddress);
             }
         } // for j
     });
