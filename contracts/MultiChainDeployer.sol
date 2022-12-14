@@ -66,11 +66,14 @@ contract MultiChainDeployer is Initializable, IAxelarExecutable  {
     }
 
     function execute(
-        bytes32,
-        string calldata,
-        string calldata,
+        bytes32 commandId,
+        string calldata sourceChain,
+        string calldata sourceAddress,
         bytes calldata payload
-    ) external {
+    ) external override {
+        bytes32 payloadHash = keccak256(payload);
+        if (!gateway.validateContractCall(commandId, sourceChain, sourceAddress, payloadHash))
+            revert NotApprovedByGateway();
         (bytes memory bytecode, bytes32 salt, bytes memory init, address sender) = abi.decode(payload, (bytes,bytes32,bytes,address));
         address deployedAddress_;
         if (init.length > 0) {

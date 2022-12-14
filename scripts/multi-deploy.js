@@ -44,7 +44,7 @@ addr["moonbeam-alpha"] = {
     "multi": "0x6736C14F38909e9E17E0312EC9DBdD0d75F0D757"
 };
 
-const v = "twentyfive";
+const v = "twentysix";
 const salt = ethers.utils.formatBytes32String(v);
 
 //const pHash = ethers.utils.solidityKeccak256(["bytes"],[p]);
@@ -68,8 +68,8 @@ async function main() {
 
     //const targetChains = [ "goerli", "mumbai", "moonbeam-alpha" ];
     //const targetChains = [ "goerli", "moonbeam-alpha" ];
-    const targetChains = [ "arbitrum-goerli" ];
-    //const targetChains = [ "moonbeam-alpha", "mumbai" ];
+    //const targetChains = [ "arbitrum-goerli" ];
+    const targetChains = [ "moonbeam-alpha", "mumbai" ];
     var chainNames = [];
     var destinations = [];
     var inits = [];
